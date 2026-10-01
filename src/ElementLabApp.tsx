@@ -9,7 +9,13 @@ import { PointerFallback } from './input/PointerFallback';
 import { describeMissing, matchRecipe } from './logic/recipeMatcher';
 import { LabScene } from './scene/LabScene';
 import { reactorAtomCount, useLabStore } from './store/labStore';
-import { SageAnnouncer, useSageStore } from './voice/SageAnnouncer';
+import { SkillCinematic } from './SkillCinematic';
+import { SageAnnouncer, useSageStore, type SageTag } from './voice/SageAnnouncer';
+import { LINES } from './voice/lines';
+import { ZARIAH_VOICES } from './voice/voices';
+
+/** Kanji prefixes for Zariah's announcements, in the style of anime system voices. */
+const TAG_KANJI: Record<SageTag, string> = { Notice: '告', Answer: '解', Confirmed: '確認', Understood: '了解', Warning: '警告' };
 
 type CameraStatus = 'idle' | 'loading' | 'active' | 'error';
 
@@ -40,6 +46,8 @@ const ElementLabApp: React.FC = () => {
   const setInputMode = useLabStore((s) => s.setInputMode);
   const voiceEnabled = useLabStore((s) => s.voiceEnabled);
   const setVoiceEnabled = useLabStore((s) => s.setVoiceEnabled);
+  const voiceId = useLabStore((s) => s.voiceId);
+  const setVoiceId = useLabStore((s) => s.setVoiceId);
   const sageRef = useRef<SageAnnouncer | null>(null);
 
   const begin = () => {
@@ -95,7 +103,7 @@ const ElementLabApp: React.FC = () => {
   };
 
   return (
-    <div className="w-screen h-screen flex bg-[#0b1020] text-slate-100 overflow-hidden select-none font-[Inter,system-ui,sans-serif]">
+    <div className="w-screen h-screen flex bg-[#0b1020] text-slate-100 overflow-hidden select-none font-[Nunito,system-ui,sans-serif] text-[15px]">
       <div className="relative flex-1 min-w-0">
         <div ref={canvasHostRef} className="absolute inset-0" />
 
@@ -133,11 +141,26 @@ const ElementLabApp: React.FC = () => {
             className={`pointer-events-auto flex items-center gap-1.5 rounded-xl bg-slate-900/70 backdrop-blur px-3 py-2 border text-sm ${
               voiceEnabled ? 'border-cyan-400/40 text-cyan-200' : 'border-white/10 text-slate-400'
             }`}
-            title={voiceEnabled ? 'Mute the Great Sage voice' : 'Unmute the Great Sage voice'}
+            title={voiceEnabled ? "Mute Zariah's voice" : "Unmute Zariah's voice"}
           >
             {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            Great Sage
+            Zariah
           </button>
+          <select
+            value={voiceId}
+            onChange={(event) => {
+              setVoiceId(Number(event.target.value));
+              if (started) sageRef.current?.say(LINES.voicePreview());
+            }}
+            className="pointer-events-auto rounded-xl bg-slate-900/70 backdrop-blur px-3 py-2 border border-white/10 text-sm font-bold text-amber-100 outline-none hover:border-amber-300/40"
+            title="Choose Zariah's voice"
+          >
+            {ZARIAH_VOICES.map((voice) => (
+              <option key={voice.id} value={voice.id} className="bg-slate-900">
+                Voice: {voice.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {hovered && <HoverCard element={hovered} />}
@@ -152,6 +175,7 @@ const ElementLabApp: React.FC = () => {
         )}
 
         {!started && <StartOverlay onCamera={startCamera} onMouse={begin} />}
+        <SkillCinematic />
       </div>
 
       <SidePanel />
@@ -160,54 +184,76 @@ const ElementLabApp: React.FC = () => {
 };
 
 const StartOverlay: React.FC<{ onCamera: () => void; onMouse: () => void }> = ({ onCamera, onMouse }) => (
-  <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0b1020]/80 backdrop-blur-sm">
-    <div className="max-w-lg rounded-2xl border border-white/10 bg-slate-900/90 p-8 shadow-2xl">
-      <div className="flex items-center gap-3 mb-4">
-        <FlaskConical className="w-8 h-8 text-cyan-300" />
-        <h1 className="text-3xl font-black tracking-tight">Element Lab</h1>
+  <div className="absolute inset-0 z-20 flex items-center justify-center bg-[radial-gradient(circle,rgba(120,60,10,0.6),rgba(11,16,32,0.92))] backdrop-blur-sm p-4">
+    <div className="max-w-xl rounded-3xl border-2 border-amber-300/50 bg-slate-900/90 p-8 shadow-[0_0_60px_rgba(251,191,36,0.25)]">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="rounded-2xl bg-amber-300/20 p-2.5">
+          <FlaskConical className="w-9 h-9 text-amber-300" />
+        </div>
+        <div>
+          <h1 className="text-4xl font-black tracking-tight">Element Lab</h1>
+          <div className="text-amber-200 font-bold">with Zariah, your little lab scientist</div>
+        </div>
       </div>
-      <p className="text-slate-300 mb-5">
-        Pick up elements from the periodic table, drop them into the reactor and discover real compounds.
+      <p className="text-lg text-slate-200 mb-5">
+        Everything around you is made of tiny <b className="text-amber-200">atoms</b>. Mix them together to make real things like water and salt!
       </p>
-      <ol className="space-y-2 text-sm text-slate-300 mb-6">
-        <li><span className="font-semibold text-white">Pinch</span> (thumb and index finger) on a tile to pick up an atom. Use both hands to carry two at once.</li>
-        <li><span className="font-semibold text-white">Release</span> over the glowing reactor to add it.</li>
-        <li>Watch the <span className="font-semibold text-white">preview</span> above the table, then pinch <span className="font-semibold text-emerald-300">REACT</span>.</li>
+      <ol className="space-y-3 mb-7">
+        {[
+          ['1', 'Grab an atom', 'Pinch your thumb and pointer finger on a tile (or click it).'],
+          ['2', 'Drop it in the pot', 'Let go over the glowing mixing pot.'],
+          ['3', 'Mix it!', 'When Zariah says it can be made, press Yes.'],
+        ].map(([n, title, text]) => (
+          <li key={n} className="flex items-start gap-3 rounded-2xl bg-white/5 p-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-300 text-lg font-black text-slate-900">{n}</span>
+            <span>
+              <span className="block font-extrabold text-white">{title}</span>
+              <span className="text-slate-300">{text}</span>
+            </span>
+          </li>
+        ))}
       </ol>
       <div className="flex gap-3">
         <button
           onClick={onCamera}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-4 py-3 font-bold text-slate-950 hover:bg-cyan-400"
+          className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-amber-300 px-4 py-4 text-lg font-black text-slate-950 shadow-lg transition hover:scale-[1.03] hover:bg-amber-200"
         >
-          <Hand className="w-5 h-5" /> Play with my hand
+          <Hand className="w-6 h-6" /> Play with my hands
         </button>
         <button
           onClick={onMouse}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-3 font-semibold hover:bg-white/5"
+          className="flex-1 flex items-center justify-center gap-2 rounded-2xl border-2 border-white/20 px-4 py-4 text-lg font-extrabold transition hover:scale-[1.03] hover:bg-white/10"
         >
-          <MousePointer2 className="w-5 h-5" /> Use mouse
+          <MousePointer2 className="w-6 h-6" /> Use the mouse
         </button>
       </div>
-      <p className="mt-4 text-xs text-slate-500">
-        The camera feed stays on your device. Hand tracking needs localhost or HTTPS.
+      <p className="mt-4 text-sm text-slate-400">
+        Your camera picture stays on this computer and is never sent anywhere.
       </p>
+      <VoiceCredit />
     </div>
   </div>
 );
 
+const VoiceCredit: React.FC = () => {
+  const voiceId = useLabStore((s) => s.voiceId);
+  const voice = ZARIAH_VOICES.find((v) => v.id === voiceId) ?? ZARIAH_VOICES[0];
+  return <p className="mt-1 text-xs text-slate-500">Voice: {voice.credit}</p>;
+};
+
 const HoverCard: React.FC<{ element: ChemicalElement }> = ({ element }) => (
-  <div className="pointer-events-none absolute top-20 left-4 w-56 rounded-xl border border-white/10 bg-slate-900/80 backdrop-blur p-3">
+  <div className="pointer-events-none absolute top-20 left-4 w-64 rounded-2xl border-2 border-white/15 bg-slate-900/85 backdrop-blur p-3.5">
     <div className="flex items-start gap-3">
       <div
-        className="w-14 h-14 rounded-lg flex items-center justify-center text-2xl font-black text-slate-900"
+        className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black text-slate-900"
         style={{ background: CATEGORY_COLORS[element.category] }}
       >
         {element.symbol}
       </div>
       <div>
-        <div className="font-bold">{element.name}</div>
-        <div className="text-xs text-slate-400">Atomic number {element.number}</div>
-        <div className="text-xs mt-1" style={{ color: CATEGORY_COLORS[element.category] }}>
+        <div className="text-lg font-extrabold">{element.name}</div>
+        <div className="text-sm text-slate-300">Atom number {element.number}</div>
+        <div className="text-sm font-bold mt-1" style={{ color: CATEGORY_COLORS[element.category] }}>
           {CATEGORY_LABELS[element.category]}
         </div>
       </div>
@@ -236,44 +282,48 @@ const SageBox: React.FC<{ onAnswer: (yes: boolean) => void }> = ({ onAnswer }) =
   const warning = line?.tag === 'Warning';
   return (
     <div
-      className={`absolute bottom-4 right-4 w-[min(26rem,calc(100%-17rem))] rounded-md border bg-[#040b1f]/85 px-4 py-3 backdrop-blur ${
+      className={`absolute bottom-4 right-4 w-[min(30rem,calc(100%-17rem))] rounded-2xl border-2 bg-[#1a0f02]/90 px-5 py-4 backdrop-blur ${
         warning
-          ? 'border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.3)]'
-          : 'border-sky-300/40 shadow-[0_0_30px_rgba(56,189,248,0.25)]'
+          ? 'border-red-400/70 shadow-[0_0_30px_rgba(248,113,113,0.35)]'
+          : 'border-amber-300/60 shadow-[0_0_35px_rgba(251,191,36,0.35)]'
       }`}
     >
-      <div className="mb-2 flex items-center gap-2 border-b border-sky-300/20 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.35em] text-sky-300/70">
-        <span className={`h-1.5 w-1.5 rounded-full ${warning ? 'bg-red-400' : 'bg-sky-300'} animate-pulse`} />
-        Great Sage
+      <div className="mb-2 flex items-center gap-2 border-b border-amber-300/25 pb-2 font-[Cinzel,serif] text-xs font-bold uppercase tracking-[0.3em] text-amber-300">
+        <span className={`h-2.5 w-2.5 rounded-full ${warning ? 'bg-red-400' : 'bg-amber-300'} sage-pulse shadow-[0_0_10px_currentColor]`} />
+        Zariah <span className="font-[Nunito,sans-serif] tracking-normal opacity-80">ザライア</span>
       </div>
       {line && (
-        <div className={`text-sm leading-relaxed ${warning ? 'text-red-100' : 'text-sky-50'}`}>
-          <span className={`mr-1.5 font-bold ${warning ? 'text-red-300' : 'text-sky-300'}`}>《{line.tag}》</span>
+        <div className={`text-lg font-semibold leading-snug ${warning ? 'text-red-100' : 'text-amber-50'}`}>
+          <span className={`mr-1.5 font-extrabold ${warning ? 'text-red-300' : 'text-amber-300'}`}>
+            《{TAG_KANJI[line.tag]}》<span className="text-sm opacity-70">{line.tag}</span>
+          </span>
           {line.text.slice(0, shown)}
           {shown < line.text.length && <span className="animate-pulse">▍</span>}
         </div>
       )}
       {prompt && (
-        <div className={line ? 'mt-3 border-t border-sky-300/20 pt-2.5' : ''}>
-          <div className="text-sm text-sky-50">
-            <span className="mr-1.5 font-bold text-sky-300">《Answer》</span>
-            Execute synthesis of {prompt.name}?
+        <div className={line ? 'mt-3 border-t border-amber-300/25 pt-3' : ''}>
+          <div className="text-lg font-semibold text-amber-50">
+            <span className="mr-1.5 font-extrabold text-amber-300">
+              《{TAG_KANJI.Answer}》<span className="text-sm opacity-70">Answer</span>
+            </span>
+            You can make {prompt.name}! Mix it now?
           </div>
-          <div className="mt-2 flex gap-2">
+          <div className="mt-3 flex gap-3">
             <button
               onClick={() => onAnswer(true)}
-              className="flex-1 rounded border border-sky-300/60 bg-sky-400/15 py-1.5 text-sm font-bold tracking-[0.3em] text-sky-100 hover:bg-sky-400/30"
+              className="flex-1 rounded-xl bg-amber-300 py-2.5 text-lg font-black text-slate-950 shadow-lg transition hover:scale-[1.04] hover:bg-amber-200"
             >
-              YES
+              Yes, mix it!
             </button>
             <button
               onClick={() => onAnswer(false)}
-              className="flex-1 rounded border border-white/20 py-1.5 text-sm font-bold tracking-[0.3em] text-slate-300 hover:bg-white/10"
+              className="flex-1 rounded-xl border-2 border-white/25 py-2.5 text-lg font-extrabold text-slate-200 transition hover:bg-white/10"
             >
-              NO
+              Not yet
             </button>
           </div>
-          <div className="mt-1.5 text-[11px] text-sky-200/50">Hand users: pinch the 3D REACT button for YES.</div>
+          <div className="mt-2 text-sm text-amber-100/60">Using your hands? Pinch the big REACT button for yes.</div>
         </div>
       )}
     </div>
@@ -401,16 +451,16 @@ const SidePanel: React.FC = () => {
       <PreviewCard />
       <ReactorTray />
 
-      <div className="flex border-y border-white/10 text-sm">
+      <div className="flex border-y border-white/10">
         {(['discoveries', 'achievements'] as const).map((id) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex-1 py-2.5 font-semibold capitalize ${tab === id ? 'text-white border-b-2 border-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
+            className={`flex-1 py-3 font-extrabold ${tab === id ? 'text-amber-200 border-b-4 border-amber-300 bg-amber-300/5' : 'text-slate-400 hover:text-slate-200'}`}
           >
             {id === 'discoveries'
-              ? `Discoveries ${Object.keys(discovered).length}/${COMPOUNDS.length}`
-              : `Achievements ${Object.keys(achievements).length}/${ACHIEVEMENTS.length}`}
+              ? `My Discoveries ${Object.keys(discovered).length}/${COMPOUNDS.length}`
+              : `My Badges ${Object.keys(achievements).length}/${ACHIEVEMENTS.length}`}
           </button>
         ))}
       </div>
@@ -421,11 +471,11 @@ const SidePanel: React.FC = () => {
 
       <button
         onClick={() => {
-          if (confirm('Reset all discoveries and achievements?')) resetProgress();
+          if (confirm('Start over? This erases all your discoveries and badges.')) resetProgress();
         }}
-        className="flex items-center justify-center gap-1.5 py-2 text-xs text-slate-500 hover:text-red-300 border-t border-white/10"
+        className="flex items-center justify-center gap-1.5 py-2.5 text-sm text-slate-500 hover:text-red-300 border-t border-white/10"
       >
-        <RotateCcw className="w-3.5 h-3.5" /> Reset progress
+        <RotateCcw className="w-4 h-4" /> Start over
       </button>
     </aside>
   );
@@ -437,33 +487,33 @@ const PreviewCard: React.FC = () => {
   const result = useMemo(() => matchRecipe(reactor), [reactor]);
 
   let accent = 'border-white/10';
-  let title = 'Empty reactor';
-  let subtitle = 'Pick up elements and drop them in the reactor to see what they make.';
+  let title = 'The pot is empty';
+  let subtitle = 'Grab some atoms and drop them in the pot to see what you can make.';
   let formula = '';
   if (result.kind === 'exact') {
     accent = 'border-emerald-400/50 bg-emerald-500/5';
     title = result.compound.name;
     formula = prettyFormula(result.compound.formula);
-    subtitle = discovered[result.compound.id] ? result.compound.fact : 'New compound! React to add it to your collection.';
+    subtitle = discovered[result.compound.id] ? result.compound.fact : 'Something new! Press Mix to add it to your collection.';
   } else if (result.kind === 'partial') {
     accent = 'border-amber-400/50 bg-amber-500/5';
-    title = `On the way to ${result.compound.name}`;
+    title = `Almost: ${result.compound.name}`;
     formula = prettyFormula(result.compound.formula);
-    subtitle = `Needs ${describeMissing(result.missing)}.`;
+    subtitle = `Add ${describeMissing(result.missing)} to finish it.`;
   } else if (result.kind === 'none') {
     accent = 'border-red-400/40 bg-red-500/5';
-    title = 'No known compound';
-    subtitle = 'This mix does not form anything in the lab catalogue. Try removing an atom.';
+    title = 'Hmm, nothing yet';
+    subtitle = 'These atoms do not make anything we know. Try taking one out.';
   }
 
   return (
-    <div className={`m-3 rounded-xl border p-4 ${accent}`}>
-      <div className="text-[11px] uppercase tracking-widest text-slate-400 mb-1">Output preview</div>
+    <div className={`m-3 rounded-2xl border-2 p-4 ${accent}`}>
+      <div className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">What you will make</div>
       <div className="flex items-baseline gap-2">
-        <div className="text-lg font-black leading-tight">{title}</div>
-        {formula && <div className="font-mono text-cyan-200">{formula}</div>}
+        <div className="text-xl font-black leading-tight">{title}</div>
+        {formula && <div className="font-mono text-lg text-amber-200">{formula}</div>}
       </div>
-      <div className="text-sm text-slate-300 mt-1.5">{subtitle}</div>
+      <div className="text-base text-slate-200 mt-1.5">{subtitle}</div>
     </div>
   );
 };
@@ -479,12 +529,12 @@ const ReactorTray: React.FC = () => {
 
   return (
     <div className="mx-3 mb-3">
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-widest text-slate-400 mb-1.5">
-        <span>Reactor</span>
+      <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1.5">
+        <span>Mixing pot</span>
         <span>{count}/{MAX_REACTOR_ATOMS} atoms</span>
       </div>
-      <div className="flex flex-wrap gap-1.5 min-h-9">
-        {entries.length === 0 && <span className="text-sm text-slate-500">Nothing yet</span>}
+      <div className="flex flex-wrap gap-1.5 min-h-10">
+        {entries.length === 0 && <span className="text-slate-500">No atoms yet</span>}
         {entries.map(([symbol, n]) => {
           const element = ELEMENTS_BY_SYMBOL[symbol];
           return (
@@ -507,16 +557,16 @@ const ReactorTray: React.FC = () => {
         <button
           onClick={react}
           disabled={count === 0}
-          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-emerald-400 py-2 font-bold text-slate-950 hover:bg-emerald-300 disabled:opacity-40"
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-400 py-3 text-lg font-black text-slate-950 transition hover:scale-[1.03] hover:bg-emerald-300 disabled:opacity-40 disabled:hover:scale-100"
         >
-          <Zap className="w-4 h-4" /> React
+          <Zap className="w-5 h-5" /> Mix!
         </button>
         <button
           onClick={clearReactor}
           disabled={count === 0}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-sm hover:bg-white/5 disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 rounded-xl border-2 border-white/15 px-4 py-3 font-bold hover:bg-white/5 disabled:opacity-40"
         >
-          <Trash2 className="w-4 h-4" /> Clear
+          <Trash2 className="w-5 h-5" /> Empty
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Cinzel:wght@600;700&display=swap');
 @import 'tailwindcss';
 
 :root {
@@ -13,4 +13,102 @@ body,
   margin: 0;
   overflow: hidden;
   background: #0b1020;
+}
+
+@keyframes sage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sage-spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes sage-cinematic {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sage-burst {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes sage-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.08);
+    filter: brightness(1.35);
+  }
+}
+
+@keyframes sage-subtitle {
+  0%,
+  20% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  35%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sage-cinematic {
+  animation: sage-cinematic var(--sage-duration, 4800ms) ease-in-out forwards;
+}
+
+.sage-burst {
+  animation: sage-burst 1.1s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+}
+
+.sage-spin {
+  animation: sage-spin 24s linear infinite;
+}
+
+.sage-spin-reverse {
+  animation: sage-spin-reverse 32s linear infinite;
+}
+
+.sage-pulse {
+  animation: sage-pulse 1.6s ease-in-out infinite;
+}
+
+.sage-subtitle {
+  animation: sage-subtitle 1.6s ease-out forwards;
+  text-shadow:
+    0 0 2px #000,
+    0 2px 6px rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(255, 200, 80, 0.6);
+}
+
+.sage-rays {
+  background: repeating-conic-gradient(from 0deg, rgba(255, 214, 102, 0.55) 0deg 2deg, transparent 2deg 9deg);
+  mask-image: radial-gradient(circle, transparent 8%, #000 22%, transparent 70%);
 }

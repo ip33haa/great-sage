@@ -4,6 +4,7 @@ import { ACHIEVEMENTS, type AchievementTier, type LabStats } from '../data/achie
 import { MAX_REACTOR_ATOMS } from '../data/compounds';
 import { isNobleGas } from '../data/elements';
 import { matchRecipe } from '../logic/recipeMatcher';
+import { DEFAULT_VOICE_ID } from '../voice/voices';
 
 export interface Toast {
   id: number;
@@ -32,8 +33,10 @@ interface LabState {
   lastReaction: ReactionEvent | null;
   inputMode: InputMode;
   voiceEnabled: boolean;
+  voiceId: number;
 
   setVoiceEnabled: (enabled: boolean) => void;
+  setVoiceId: (id: number) => void;
   addAtom: (symbol: string) => boolean;
   removeAtom: (symbol: string) => void;
   clearReactor: () => void;
@@ -83,8 +86,10 @@ export const useLabStore = create<LabState>()(
         lastReaction: null,
         inputMode: 'pointer',
         voiceEnabled: true,
+        voiceId: DEFAULT_VOICE_ID,
 
         setVoiceEnabled: (voiceEnabled) => set({ voiceEnabled }),
+        setVoiceId: (voiceId) => set({ voiceId }),
 
         addAtom: (symbol) => {
           const { reactor, stats } = get();
@@ -170,6 +175,7 @@ export const useLabStore = create<LabState>()(
         achievements: state.achievements,
         stats: state.stats,
         voiceEnabled: state.voiceEnabled,
+        voiceId: state.voiceId,
       }),
     },
   ),

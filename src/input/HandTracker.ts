@@ -5,11 +5,15 @@ const ASSET_BASE = `${import.meta.env.BASE_URL}mediapipe`;
 
 const MAX_HANDS = 2;
 /** Fraction of the camera frame (centred) that maps to the full screen, so users need not reach the edges. */
-const ACTIVE_REGION = 0.7;
+const ACTIVE_REGION = 0.6;
 /** Pinch ratio = thumb-to-index distance / palm length. Hysteresis avoids flicker. */
-const PINCH_ON = 0.3;
-const PINCH_OFF = 0.45;
-const LOST_HAND_MS = 250;
+const PINCH_ON = 0.36;
+const PINCH_OFF = 0.55;
+/** While the fingers are closing in on a pinch the cursor barely moves, so it stays on the tile being aimed at. */
+const PINCH_APPROACH = 0.75;
+/** Consecutive open frames needed before a held atom is let go, so one bad frame does not drop it. */
+const RELEASE_FRAMES = 3;
+const LOST_HAND_MS = 400;
 
 const THUMB_TIP = 4;
 const INDEX_TIP = 8;
@@ -21,6 +25,7 @@ export interface HandSlot {
   landmarks: NormalizedLandmark[] | null;
   pinchRatio: number;
   lastSeen: number;
+  openFrames: number;
 }
 
 interface Detection {
@@ -35,6 +40,7 @@ export class HandTracker implements CursorSource {
     landmarks: null,
     pinchRatio: 1,
     lastSeen: 0,
+    openFrames: 0,
   }));
   readonly cursors = this.slots.map((slot) => slot.cursor);
   readonly video: HTMLVideoElement;
@@ -159,6 +165,7 @@ export class HandTracker implements CursorSource {
         slot.cursor.visible = false;
         slot.cursor.pressed = false;
         slot.landmarks = null;
+        slot.openFrames = 0;
       }
     }
   }
@@ -174,8 +181,13 @@ export class HandTracker implements CursorSource {
     const palm = Math.max(1e-4, dist(hand[WRIST], hand[MIDDLE_MCP]));
     slot.pinchRatio = dist(hand[THUMB_TIP], hand[INDEX_TIP]) / palm;
 
-    if (cursor.pressed && slot.pinchRatio > PINCH_OFF) cursor.pressed = false;
-    else if (!cursor.pressed && slot.pinchRatio < PINCH_ON) cursor.pressed = true;
+    if (cursor.pressed) {
+      slot.openFrames = slot.pinchRatio > PINCH_OFF ? slot.openFrames + 1 : 0;
+      if (slot.openFrames >= RELEASE_FRAMES) cursor.pressed = false;
+    } else if (slot.pinchRatio < PINCH_ON) {
+      cursor.pressed = true;
+      slot.openFrames = 0;
+    }
 
     if (!cursor.visible) {
       cursor.x = detection.x;
@@ -184,9 +196,10 @@ export class HandTracker implements CursorSource {
       return;
     }
 
-    // Adaptive smoothing: steady when still, responsive when moving fast.
+    // Adaptive smoothing: steady when still, responsive when moving fast, nearly frozen while a pinch closes.
     const speed = Math.hypot(detection.x - cursor.x, detection.y - cursor.y);
-    const alpha = clamp(0.2 + speed * 4, 0.2, 0.85);
+    const closing = !cursor.pressed && slot.pinchRatio < PINCH_APPROACH && speed < 0.12;
+    const alpha = closing ? 0.06 : clamp(0.18 + speed * 4, 0.18, 0.85);
     cursor.x += (detection.x - cursor.x) * alpha;
     cursor.y += (detection.y - cursor.y) * alpha;
   }

@@ -11,7 +11,12 @@ const SPACING = 1.1;
 const CURSOR_Z = 1.6;
 const REACTOR_POS = new THREE.Vector3(0, -6.3, 0.8);
 const REACTOR_RADIUS = 1.8;
-const REACTOR_DROP_RADIUS = 2.4;
+const REACTOR_DROP_RADIUS = 3;
+/** Hand-friendly picking: the cursor snaps to the nearest tile within this distance, and keeps it a little longer. */
+const TILE_SNAP_RADIUS = 0.8;
+const TILE_STICKY_RADIUS = 1;
+/** A pinch still grabs the tile hovered this recently, since the cursor can slip while the fingers close. */
+const PICK_GRACE_MS = 350;
 /** Centre of the empty block above the transition metals (columns 3-12, rows 1-3). */
 const PREVIEW_POS = new THREE.Vector3(-2.2, 5.1, 0.6);
 const PREVIEW_MOLECULE_X = -3.1;
@@ -37,6 +42,8 @@ interface HandInteraction {
   hoveredTile: THREE.Mesh | null;
   hoveredButton: THREE.Mesh | null;
   wasPressed: boolean;
+  lastTile: THREE.Mesh | null;
+  lastTileAt: number;
 }
 
 const CURSOR_COLORS: Record<string, string> = { 'hand-0': '#67e8f9', 'hand-1': '#f9a8d4', pointer: '#f8fafc' };
@@ -192,6 +199,8 @@ export class LabScene {
   private readonly camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 200);
   private readonly raycaster = new THREE.Raycaster();
   private readonly cursorPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -CURSOR_Z);
+  private readonly tilePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  private readonly tilePoint = new THREE.Vector3();
   private readonly timer = new THREE.Timer();
   private readonly resizeObserver: ResizeObserver;
   private readonly unsubscribe: () => void;
@@ -520,7 +529,17 @@ export class LabScene {
       );
       ring.renderOrder = 20;
       this.scene.add(ring);
-      hand = { ring, color, world: new THREE.Vector3(), held: null, hoveredTile: null, hoveredButton: null, wasPressed: false };
+      hand = {
+        ring,
+        color,
+        world: new THREE.Vector3(),
+        held: null,
+        hoveredTile: null,
+        hoveredButton: null,
+        wasPressed: false,
+        lastTile: null,
+        lastTileAt: 0,
+      };
       this.hands.set(id, hand);
     }
     return hand;
@@ -547,11 +566,15 @@ export class LabScene {
     );
     hand.ring.scale.setScalar(state.pressed ? 0.75 : 1);
 
+    const now = performance.now();
     if (!hand.held) {
-      const tileHit = this.raycaster.intersectObjects(this.tiles, false)[0];
-      hand.hoveredTile = (tileHit?.object as THREE.Mesh) ?? null;
       const buttonHit = this.raycaster.intersectObjects(this.buttons, false)[0];
       hand.hoveredButton = (buttonHit?.object as THREE.Mesh) ?? null;
+      hand.hoveredTile = hand.hoveredButton ? null : this.tileNear(hand.hoveredTile);
+      if (hand.hoveredTile) {
+        hand.lastTile = hand.hoveredTile;
+        hand.lastTileAt = now;
+      }
     } else {
       hand.hoveredTile = null;
       hand.hoveredButton = null;
@@ -562,8 +585,11 @@ export class LabScene {
     hand.wasPressed = state.pressed;
 
     if (justPressed) {
-      if (hand.hoveredTile) {
-        this.pickUp(hand, (hand.hoveredTile.userData as TileData).element);
+      const tile = hand.hoveredTile ?? (now - hand.lastTileAt < PICK_GRACE_MS ? hand.lastTile : null);
+      if (tile && !hand.hoveredButton) {
+        hand.hoveredTile = null;
+        hand.lastTile = null;
+        this.pickUp(hand, (tile.userData as TileData).element);
       } else if (hand.hoveredButton) {
         this.pressButton(hand.hoveredButton);
       }
@@ -574,6 +600,30 @@ export class LabScene {
       hand.held.object.rotation.y += 0.04;
       if (justReleased) this.dropHeld(hand, overReactor);
     }
+  }
+
+  /** Tile under the cursor, snapping to the nearest one and favouring the tile that is already hovered. */
+  private tileNear(current: THREE.Mesh | null): THREE.Mesh | null {
+    const direct = this.raycaster.intersectObjects(this.tiles, false)[0]?.object as THREE.Mesh | undefined;
+    if (!this.raycaster.ray.intersectPlane(this.tilePlane, this.tilePoint)) return direct ?? null;
+    const distance = (tile: THREE.Mesh) => {
+      const base = (tile.userData as TileData).base;
+      return Math.hypot(base.x - this.tilePoint.x, base.y - this.tilePoint.y);
+    };
+    if (current && distance(current) < TILE_STICKY_RADIUS && (!direct || direct === current || distance(direct) > 0.45)) {
+      return current;
+    }
+    if (direct) return direct;
+    let best: THREE.Mesh | null = null;
+    let bestDistance = TILE_SNAP_RADIUS;
+    for (const tile of this.tiles) {
+      const d = distance(tile);
+      if (d < bestDistance) {
+        best = tile;
+        bestDistance = d;
+      }
+    }
+    return best;
   }
 
   private isOverReactor(world: THREE.Vector3) {
